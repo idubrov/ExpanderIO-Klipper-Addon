@@ -34,7 +34,8 @@ class EioI2cInputs(object):
             buttons.register_button_push(interrupt_pin, self._send_buttons_state)
         self._printer.register_event_handler("klippy:ready", self._ready)
     def _ready(self):
-        self._send_buttons_state(self._printer.get_reactor().monotonic())
+        self._printer.get_reactor().register_async_callback(lambda e, s=self: s._send_buttons_state(e))
+
     def _build_inputs_config(self):
         # Build config commands
         for cb in self._config_callbacks:
@@ -119,4 +120,4 @@ class EioI2cInputs(object):
                     'state': [state],
                     '#receive_time': eventtime
                 }
-                cb(params)
+                self._printer.get_reactor().register_async_callback(lambda e, p=params, c=cb: c(p))
