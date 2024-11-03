@@ -41,7 +41,7 @@ class EioMCP23017(eio_i2c_inputs.EioI2cInputs):
             REG_GPIO: 0,
         }
     def _build_config(self):
-        # Reset the defalut configuration
+        # Reset the default configuration
         # MIRROR = 1, The INT pins are internally connected
         # ODR = 1, Configures the INT pin as an open-drain output
         self._mcu.add_config_cmd("i2c_write oid=%d data=%02x%02x" % (self._oid, REG_IOCON, 0x44))
