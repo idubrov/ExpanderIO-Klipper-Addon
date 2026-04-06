@@ -18,6 +18,7 @@ REG_INTCAP = 0x10
 REG_GPIO = 0x12
 REG_OLAT = 0x14
 
+
 class EioMCP23017(eio_i2c_inputs.EioI2cInputs):
     def __init__(self, config):
         super().__init__(config)
@@ -40,15 +41,18 @@ class EioMCP23017(eio_i2c_inputs.EioI2cInputs):
             REG_GPPU: 0,
             REG_GPIO: 0,
         }
+        self._reactor = self._printer.get_reactor()
+        self._printer.register_event_handler("klippy:connect", self.handle_connect)
+
     def _build_config(self):
-        # Reset the default configuration
-        # MIRROR = 1, The INT pins are internally connected
-        # ODR = 1, Configures the INT pin as an open-drain output
-        self._mcu.add_config_cmd("i2c_write oid=%d data=%02x%02x" % (self._oid, REG_IOCON, 0x44))
-        # Transfer all regs with their initial cached state
+        pass
+
+    def handle_connect(self):
+        self._i2c.i2c_write([REG_IOCON, 0x44])
         for _reg, _data in self.reg_dict.items():
-            self._mcu.add_config_cmd("i2c_write oid=%d data=%02x%02x%02x" % (
-                self._oid, _reg, _data & 0xFF, (_data >> 8) & 0xFF), is_init=True)
+            curtime = self._reactor.monotonic()
+            printtime = self._mcu.estimated_print_time(curtime)
+            self.send_register(_reg, printtime)
 
     def setup_input_pin(self, pin_idx, pullup):
         if pullup == 1:
@@ -57,33 +61,40 @@ class EioMCP23017(eio_i2c_inputs.EioI2cInputs):
             raise self._ppins.error("Can not pulldown MCP23017 pins")
         self.set_bits_in_register(REG_IODIR, 1 << pin_idx)
         self.set_bits_in_register(REG_GPINTEN, 1 << pin_idx)
+
     def read_input_pins(self):
         params = self._i2c.i2c_read([REG_GPIO], 2)
-        response = bytearray(params['response'])
+        response = bytearray(params["response"])
         return (response[1] << 8) | response[0]
-#     def setup_pin(self, pin_type, pin_params):
-#         if pin_type == 'digital_out' and pin_params['pin'][0:4] == "PIN_":
-#             return MCP23017_digital_out(self, pin_params)
-#         raise pins.error("Wrong pin or incompatible type: %s with type %s! " % (
-#             pin_params['pin'][0:4], pin_type))
-#     def get_mcu(self):
-#         return self._mcu
+
+    #     def setup_pin(self, pin_type, pin_params):
+    #         if pin_type == 'digital_out' and pin_params['pin'][0:4] == "PIN_":
+    #             return MCP23017_digital_out(self, pin_params)
+    #         raise pins.error("Wrong pin or incompatible type: %s with type %s! " % (
+    #             pin_params['pin'][0:4], pin_type))
+    #     def get_mcu(self):
+    #         return self._mcu
     def get_oid(self):
         return self._oid
+
     def clear_bits_in_register(self, reg, bitmask):
         if reg in self.reg_dict:
             self.reg_dict[reg] &= ~(bitmask)
+
     def set_bits_in_register(self, reg, bitmask):
         if reg in self.reg_dict:
             self.reg_dict[reg] |= bitmask
+
     def set_register(self, reg, value):
         if reg in self.reg_dict:
             self.reg_dict[reg] = value
+
     def send_register(self, reg, print_time):
         data = [reg & 0xFF, self.reg_dict[reg] & 0xFF, (self.reg_dict[reg] >> 8) & 0xFF]
         clock = self._mcu.print_time_to_clock(print_time)
         self._i2c.i2c_write(data, minclock=self._last_clock, reqclock=clock)
         self._last_clock = clock
+
 
 # class MCP23017_digital_out(object):
 #     def __init__(self, mcp23017, pin_params):
@@ -123,6 +134,7 @@ class EioMCP23017(eio_i2c_inputs.EioI2cInputs):
 #         self._mcp23017.send_register(REG_DATA, print_time)
 #     def set_pwm(self, print_time, value, cycle_time=None):
 #         self.set_digital(print_time, value >= 0.5)
+
 
 def load_config_prefix(config):
     return EioMCP23017(config)
