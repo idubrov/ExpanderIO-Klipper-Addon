@@ -40,15 +40,21 @@ class EioMCP23017(eio_i2c_inputs.EioI2cInputs):
             REG_GPPU: 0,
             REG_GPIO: 0,
         }
+        self._printer.register_event_handler("klippy:connect", self.handle_connect)
+
     def _build_config(self):
+        pass
+
+    def handle_connect(self):
         # Reset the default configuration
         # MIRROR = 1, The INT pins are internally connected
         # ODR = 1, Configures the INT pin as an open-drain output
-        self._mcu.add_config_cmd("i2c_write oid=%d data=%02x%02x" % (self._oid, REG_IOCON, 0x44))
-        # Transfer all regs with their initial cached state
+        self._i2c.i2c_write([REG_IOCON, 0x44])
+        reactor = self._mcu.get_printer().get_reactor()
         for _reg, _data in self.reg_dict.items():
-            self._mcu.add_config_cmd("i2c_write oid=%d data=%02x%02x%02x" % (
-                self._oid, _reg, _data & 0xFF, (_data >> 8) & 0xFF), is_init=True)
+            curtime = reactor.monotonic()
+            printtime = self._mcu.estimated_print_time(curtime)
+            self.send_register(_reg, printtime)
 
     def setup_input_pin(self, pin_idx, pullup):
         if pullup == 1:

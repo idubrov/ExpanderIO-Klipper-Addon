@@ -43,24 +43,29 @@ class EioSX1509(eio_i2c_inputs.EioI2cInputs):
                          REG_SENSE_B : 0, REG_SENSE_A : 0,
                          REG_ANALOG_DRIVER_ENABLE : 0}
         self.reg_i_on_dict = {reg : 0 for reg in REG_I_ON}
+        self._printer.register_event_handler("klippy:connect", self.handle_connect)
     def _build_config(self):
-        # Reset the chip
-        self._mcu.add_config_cmd("i2c_write oid=%d data=%02x%02x" % (
-            self._oid, REG_RESET, 0x12))
-        self._mcu.add_config_cmd("i2c_write oid=%d data=%02x%02x" % (
-            self._oid, REG_RESET, 0x34))
+        pass
+
+    def handle_connect(self):
+        # Reset the chip, Default RegClock/RegMisc 0x0
+        self._i2c.i2c_write([REG_RESET, 0x12])
+        self._i2c.i2c_write([REG_RESET, 0x34])
         # Enable Oscillator
-        self._mcu.add_config_cmd("i2c_modify_bits oid=%d reg=%02x"
-                                 " clear_set_bits=%02x%02x" % (
-                                     self._oid, REG_CLOCK, 0, (1 << 6)))
+        self._i2c.i2c_write([REG_CLOCK, (1 << 6)])
         # Setup Clock Divider
-        self._mcu.add_config_cmd("i2c_modify_bits oid=%d reg=%02x"
-                                 " clear_set_bits=%02x%02x" % (
-                                     self._oid, REG_MISC, 0, (1 << 4)))
+        self._i2c.i2c_write([REG_MISC, (1 << 4)])
         # Transfer all regs with their initial cached state
-        for _reg, _data in self.reg_dict.items():
-            self._mcu.add_config_cmd("i2c_write oid=%d data=%02x%04x" % (
-                self._oid, _reg, _data), is_init=True)
+        reactor = self._mcu.get_printer().get_reactor()
+        for _reg in self.reg_dict:
+            curtime = reactor.monotonic()
+            printtime = self._mcu.estimated_print_time(curtime)
+            self.send_register(_reg, printtime)
+        for reg in self.reg_i_on_dict:
+            curtime = reactor.monotonic()
+            printtime = self._mcu.estimated_print_time(curtime)
+            self.send_register(reg, printtime)
+
     def setup_pin(self, pin_type, pin_params):
         if pin_type == 'digital_out' and pin_params['pin'][0:4] == "PIN_":
             return SX1509_digital_out(self, pin_params)
