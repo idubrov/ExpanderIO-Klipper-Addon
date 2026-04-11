@@ -114,8 +114,8 @@ class EioI2cInputs(object):
         return 0
 
     def register_response(self, callback, name, oid):
-        if name != "buttons_state":
-            raise pins.error("I2C inputs only supports buttons_state response callback")
+        if not name.startswith("buttons_state"):
+            raise pins.error("I2C inputs only supports buttons_state response callback, got '%s'" % name)
         self._oid_to_callbacks[oid] = callback
 
     # Alias for new Klipper that renamed register_response to register_serial_response
