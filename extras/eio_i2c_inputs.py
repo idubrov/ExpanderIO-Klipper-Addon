@@ -118,6 +118,9 @@ class EioI2cInputs(object):
             raise pins.error("I2C inputs only supports buttons_state response callback")
         self._oid_to_callbacks[oid] = callback
 
+    # Alias for new Klipper that renamed register_response to register_serial_response
+    register_serial_response = register_response
+
     def lookup_command(self, msgformat, cq=None):
         parts = msgformat.split()
         name = parts[0]
